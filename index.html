@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recuperación de clave</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<main>
+  <h1>Recuperación de una clave al menor costo</h1>
+  <p class="sub">Una estación cifra cada mensaje <b>m</b> con una clave secreta fija <b>k</b> mediante
+    <b>c = (m · k) mod n</b>. Se conoce <b>n</b> y un catálogo de mensajes, cada uno con un costo positivo.
+    Antes de ver cualquier respuesta hay que elegir el conjunto de consultas de <b>menor costo</b> que permita
+    identificar cualquier clave entre 0 y n − 1. Criterio: un conjunto distingue todas las claves si y sólo si
+    <b>gcd(n, m₁, …, mₜ) = 1</b>; si no, las claves 0 y n/g dan las mismas respuestas.</p>
+
+  <div class="tabs">
+    <button id="tab-solver" class="active">Diseño y ataque</button>
+    <button id="tab-tests">Pruebas</button>
+  </div>
+
+  <!-- ===== Diseño y ataque ===== -->
+  <section id="solver">
+    <div class="card">
+      <label>Módulo n <input id="n" type="number" value="60" min="2"></label>
+      <label>Clave secreta k <input id="key" type="number" value="37" min="0"></label>
+      <table>
+        <thead><tr><th>Mensaje m</th><th>Costo</th><th></th></tr></thead>
+        <tbody id="catalog"></tbody>
+      </table>
+      <button id="add">+ mensaje</button>
+      <button id="reset">Escenario n = 60</button>
+      <button id="drop">Quitar 7 y 15</button>
+      <button id="run" class="primary">Diseñar y ejecutar ataque</button>
+    </div>
+    <div id="out"></div>
+  </section>
+
+  <!-- ===== Pruebas ===== -->
+  <section id="tests" class="hidden">
+    <div class="card">
+      <h2>Pruebas unitarias · test_main.py</h2>
+      <p class="sub">Se ejecutan en el servidor con el código actual de main.py.</p>
+      <button id="run-tests" class="primary">▶ Correr pruebas</button>
+      <div id="score" class="score"></div>
+    </div>
+    <div id="test-list"></div>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const DEFAULT = [[6, 2], [10, 2], [15, 2], [7, 9]];
+
+// ---------- Utilidades ----------
+
+const gcd = (a, b) => (b ? gcd(b, a % b) : a);
+const range = n => [...Array(n).keys()];
+const compatibles = k => `${k} ${k === 1 ? "clave compatible" : "claves compatibles"}`;
+
+async function solveApi(n, catalog, key) {
+  const res = await fetch("/api/solve", { method: "POST", body: JSON.stringify({ n, key, catalog }) });
+  return res.json();
+}
+
+function gcdSequence(n, plan) {
+  const seq = [n];
+  for (const m of plan) seq.push(gcd(seq.at(-1), m));
+  return seq.join(" → ");
+}
+
+// ---------- Catálogo ----------
+
+function addRow(m = "", c = 1) {
+  const tr = document.createElement("tr");
+  tr.innerHTML = `<td><input type="number" value="${m}"></td>
+                  <td><input type="number" value="${c}" min="1"></td>
+                  <td><button class="x" title="Quitar">×</button></td>`;
+  tr.querySelector(".x").onclick = () => tr.remove();
+  $("catalog").append(tr);
+}
+
+function setCatalog(rows) {
+  $("catalog").innerHTML = "";
+  rows.forEach(([m, c]) => addRow(m, c));
+}
+
+function readCatalog() {
+  return [...$("catalog").rows]
+    .map(tr => [...tr.querySelectorAll("input")].map(i => i.value))
+    .filter(([m, c]) => m !== "" && c !== "");
+}
+
+// ---------- Claves por paso ----------
+
+function grid(n, keys, prev = keys) {
+  const sel = new Set(keys), comp = new Set(prev);
+  const cls = k => (sel.has(k) ? "sel" : comp.has(k) ? "comp" : "");
+  return `<div class="grid">${range(n).map(k => `<span class="${cls(k)}">${k}</span>`).join("")}</div>`;
+}
+
+const LEGEND = `<div class="legend"><span><i class="comp"></i>compatible antes de la consulta</span>
+  <span><i class="sel"></i>seleccionada: sigue compatible tras la respuesta</span><span><i></i>descartada</span></div>`;
+
+// Cada paso colorea las compatibles antes de la consulta y señala las que quedan.
+function stepsHtml(n, steps) {
+  let prev = range(n);
+  let html = LEGEND + `<div class="step"><div class="step-head">Antes de consultar · ${compatibles(n)}</div>${grid(n, [], prev)}</div>`;
+  for (const s of steps) {
+    const head = `Consulta m = ${s.m} → respuesta c = ${s.c} · claves compatibles: ${prev.length} → <b>${s.keys.length}</b>`;
+    html += `<div class="step"><div class="step-head">${head}</div>${grid(n, s.keys, prev)}</div>`;
+    prev = s.keys;
+  }
+  return html;
+}
+
+// ---------- Resultado ----------
+
+function singleMessageText(n, catalog, cost) {
+  const singles = catalog.filter(([m]) => gcd(n, +m) === 1);
+  if (!singles.length) return "Ningún mensaje del catálogo identifica la clave por sí solo.";
+  const list = singles.map(([m, c]) => `${m} (costo ${c})`).join(", ");
+  const cheapest = Math.min(...singles.map(([, c]) => +c));
+  const verdict = cost < cheapest ? `El plan elegido cuesta ${cost}, menos que cualquiera de ellos.`
+    : "Ninguna combinación de otros mensajes cuesta menos.";
+  return `Mensajes que identifican la clave por sí solos: ${list}. ${verdict}`;
+}
+
+function renderPlan(n, r, catalog, key) {
+  const verified = r.verified
+    ? `el plan identifica correctamente las ${n} claves posibles (0 a ${n - 1}).`
+    : "el plan NO identifica todas las claves.";
+  const last = r.steps.at(-1)?.keys ?? [];
+  return `<h2>1. Diseño del ataque</h2>
+    <p>Conjunto de costo mínimo: <b>{${r.plan.join(", ")}}</b> · costo total <b>${r.cost}</b></p>
+    <p>gcd acumulado: ${gcdSequence(n, r.plan)}, así que gcd(n, plan) = 1 y el conjunto distingue todas las claves.</p>
+    <p>${singleMessageText(n, catalog, r.cost)}</p>
+    <p class="${r.verified ? "ok" : "bad"}">Verificación: ${verified}</p>
+    <h2 style="margin-top:20px">2. Ejecución del ataque (clave secreta k = ${key})</h2>
+    ${stepsHtml(n, r.steps)}
+    <p class="ok">Clave recuperada: ${last[0]} · costo total: ${r.cost}</p>`;
+}
+
+function renderAmbiguous(n, r, catalog) {
+  const [a, b] = r.pair;
+  const rows = catalog.map(([m]) => `<tr><td>${m}</td><td>${m * a % n}</td><td>${m * b % n}</td></tr>`).join("");
+  return `<p class="bad">El catálogo completo es insuficiente: gcd(n, mensajes) = ${n / b} &gt; 1.</p>
+    <p>Las claves <b>${a}</b> y <b>${b}</b> son distintas y producen las mismas respuestas para todos los mensajes:</p>
+    <table><thead><tr><th>Mensaje m</th><th>m · ${a} mod ${n}</th><th>m · ${b} mod ${n}</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function renderDijkstra(order) {
+  const rows = order.map(([g, cost], i) => `<tr><td>${i + 1}</td><td>g = ${g}</td><td>${g}</td><td>${cost}</td></tr>`).join("");
+  return `<h2>Detalle de la búsqueda: Dijkstra sobre los divisores de n</h2>
+    <p class="sub">Estado g = gcd(n, mensajes elegidos) = número de claves que siguen siendo compatibles.
+      Elegir el mensaje m lleva de g a gcd(g, m) con su costo. Se busca el camino de menor costo de g = n a g = 1;
+      cada estado se fija en orden de costo creciente.</p>
+    <table><thead><tr><th>#</th><th>Estado</th><th>Claves compatibles</th><th>Costo mínimo</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+async function runSolver() {
+  const n = +$("n").value, key = $("key").value, catalog = readCatalog();
+  const r = await solveApi(n, catalog, key);
+  const body = r.error ? `<p class="bad">${r.error}</p>` : r.ok ? renderPlan(n, r, catalog, key) : renderAmbiguous(n, r, catalog);
+  const trace = r.dijkstra ? `<div class="card">${renderDijkstra(r.dijkstra)}</div>` : "";
+  $("out").innerHTML = `<div class="card">${body}</div>` + trace;
+}
+
+// ---------- Pruebas ----------
+
+function renderTest(t) {
+  return `<div class="card test">
+    <span class="tag ${t.ok ? "pass" : "fail"}">${t.ok ? "PASS" : "FAIL"}</span>
+    <div><b class="title">${t.title}</b><div>${t.doc}</div><code>${t.name}</code>${t.ok ? "" : `<div class="err">${t.error}</div>`}</div>
+    <span class="ms">${t.ms} ms</span></div>`;
+}
+
+function renderScore(results) {
+  const passed = results.filter(t => t.ok).length;
+  const all = passed === results.length;
+  return `<span class="${all ? "ok" : "bad"}">${passed}/${results.length} PASS</span>
+    · ${all ? "todas las pruebas pasan" : "hay pruebas que fallan"}`;
+}
+
+async function runTests() {
+  $("score").textContent = "Ejecutando…";
+  $("test-list").innerHTML = "";
+  const results = await (await fetch("/api/tests")).json();
+  $("test-list").innerHTML = results.map(renderTest).join("");
+  $("score").innerHTML = renderScore(results);
+}
+
+// ---------- Pestañas ----------
+
+const TABS = ["solver", "tests"];
+
+function showTab(name) {
+  for (const t of TABS) {
+    $(t).classList.toggle("hidden", t !== name);
+    $("tab-" + t).classList.toggle("active", t === name);
+  }
+}
+
+// ---------- Inicio ----------
+
+$("add").onclick = () => addRow();
+$("reset").onclick = () => setCatalog(DEFAULT);
+$("drop").onclick = () => setCatalog(DEFAULT.filter(([m]) => m !== 7 && m !== 15));
+$("run").onclick = runSolver;
+$("run-tests").onclick = runTests;
+TABS.forEach(t => ($("tab-" + t).onclick = () => showTab(t)));
+
+setCatalog(DEFAULT);
+runSolver();
+if (location.hash === "#pruebas") { showTab("tests"); runTests(); }
+</script>
+</body>
+</html>

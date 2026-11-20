@@ -1,0 +1,72 @@
+:root {
+  --bg: #f7f7f5; --card: #ffffff; --text: #1d1d1b; --muted: #6b6b66; --line: #dddcd5;
+  --accent: #2f6fdb; --ok: #1f8a4c; --bad: #c2412d; --cell: #ebebe6; --mark: #1d1d1b;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #161615; --card: #1f1f1e; --text: #ececea; --muted: #9a9a94; --line: #343432;
+    --accent: #6b9cf0; --ok: #4cc27f; --bad: #ef7a63; --cell: #2c2c2a; --mark: #ececea;
+  }
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+       font: 17px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 920px; margin: 0 auto; padding: 28px 16px; }
+h1 { font-size: 26px; font-weight: 650; margin: 0 0 12px; }
+h2 { font-size: 18px; font-weight: 600; margin: 0 0 8px; }
+b { font-weight: 600; }
+.sub { color: var(--muted); margin: 0 0 16px; }
+.ok { color: var(--ok); }
+.bad { color: var(--bad); }
+.hidden { display: none; }
+
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+        padding: 16px; margin-bottom: 18px; }
+
+.tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+.tabs button.active { background: var(--text); border-color: var(--text); color: var(--bg); }
+
+button { font: 14px system-ui, -apple-system, sans-serif; color: var(--text); background: var(--bg);
+         border: 1px solid var(--line); border-radius: 6px; padding: 7px 12px; cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.x { padding: 3px 8px; color: var(--muted); }
+
+label { display: inline-flex; flex-direction: column; font-size: 13px; color: var(--muted); margin-right: 14px; }
+input { font: 16px system-ui, sans-serif; color: var(--text); background: var(--bg);
+        border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; width: 100px; }
+input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+
+table { border-collapse: collapse; margin: 12px 0; }
+th, td { padding: 4px 12px; text-align: left; border-bottom: 1px solid var(--line);
+         font-variant-numeric: tabular-nums; }
+th { font-size: 13px; font-weight: 500; color: var(--muted); }
+
+/* ---- Claves por paso ---- */
+.step { margin: 14px 0; }
+.step-head { margin-bottom: 6px; }
+.grid { display: flex; flex-wrap: wrap; gap: 3px; }
+.grid span { width: 26px; height: 26px; border-radius: 4px; background: var(--cell); color: var(--muted);
+             font-size: 11px; display: grid; place-items: center; }
+/* compatible antes de la consulta / seleccionada (sigue compatible) después */
+.grid span.comp { background: color-mix(in srgb, var(--accent) 30%, var(--cell)); color: var(--text); }
+.grid span.sel { background: var(--accent); color: var(--bg); outline: 2px solid var(--mark);
+                 outline-offset: 1px; position: relative; z-index: 1; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--muted); margin: 8px 0 4px; }
+.legend i { display: inline-block; width: 16px; height: 16px; margin-right: 6px; vertical-align: -3px;
+            border-radius: 3px; background: var(--cell); }
+.legend i.comp { background: color-mix(in srgb, var(--accent) 30%, var(--cell)); }
+.legend i.sel { background: var(--accent); outline: 2px solid var(--mark); outline-offset: 1px; }
+
+/* ---- Pruebas ---- */
+.score { font-size: 20px; font-weight: 650; margin-top: 16px; }
+.test { display: grid; grid-template-columns: 64px 1fr auto; gap: 14px; align-items: start; }
+.tag { font-size: 12px; font-weight: 600; padding: 6px 0; text-align: center; border-radius: 4px; color: #fff; }
+.tag.pass { background: var(--ok); }
+.tag.fail { background: var(--bad); }
+.test .title { display: block; font-size: 17px; }
+.test code { font: 12px ui-monospace, Menlo, monospace; color: var(--muted); word-break: break-all; }
+.test .err { color: var(--bad); }
+.test .ms { color: var(--muted); white-space: nowrap; }
+@media (max-width: 560px) { .test { grid-template-columns: 56px 1fr; } .test .ms { grid-column: 2; } }
